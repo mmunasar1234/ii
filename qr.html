@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barcode — Link Toos</title>
+  <script src="qr-lib.js"></script>
+  <style>
+    :root { --gold: #c9a962; --cream: #faf7f2; --dark: #2c2416; --ok: #2d6a4f; --err: #b33; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #2c2416;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      color: #fff;
+    }
+    .card {
+      background: var(--cream);
+      color: var(--dark);
+      border-radius: 12px;
+      padding: 1.25rem;
+      max-width: 640px;
+      width: 100%;
+      border: 1px solid rgba(201,169,98,0.4);
+    }
+    .bc-box {
+      background: #fff;
+      border: 2px solid var(--gold);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    #bcCanvas { max-width: 100%; image-rendering: pixelated; }
+    .tag { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-top: 0.5rem; }
+    h1 { font-family: Georgia, serif; font-size: 1.4rem; text-align: center; font-style: italic; }
+    label { font-size: 0.65rem; color: #777; text-transform: uppercase; display: block; margin: 0.5rem 0 0.25rem; }
+    input, select {
+      width: 100%;
+      padding: 0.55rem;
+      border: 1px solid var(--gold);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      margin-bottom: 0.35rem;
+    }
+    .url-out {
+      font-size: 0.65rem;
+      word-break: break-all;
+      background: #f0ebe3;
+      padding: 0.5rem;
+      border-radius: 6px;
+      color: #333;
+      line-height: 1.45;
+      margin: 0.5rem 0;
+    }
+    .msg { font-size: 0.7rem; margin-bottom: 0.35rem; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--err); }
+    .btns { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; margin-top: 0.5rem; }
+    button, a.btn {
+      padding: 0.55rem 0.85rem;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    .btn-g { background: var(--gold); color: #fff; }
+    .btn-o { background: #fff; color: var(--dark); border: 1px solid var(--gold); }
+    .steps {
+      font-size: 0.68rem;
+      color: #666;
+      line-height: 1.55;
+      margin-top: 0.75rem;
+      padding: 0.65rem;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px dashed #ddd;
+    }
+    .steps strong { color: var(--dark); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="bc-box">
+      <canvas id="bcCanvas"></canvas>
+      <p class="tag">Scan telefoon → toos u fur link</p>
+    </div>
+
+    <h1>Barcode Martiqaad</h1>
+
+    <label>1 — Link website-kaaga (https)</label>
+    <input type="url" id="siteUrl" placeholder="https://magacaaga.github.io/wedding/" />
+
+    <label>2 — Bogga martiqaad</label>
+    <select id="pageSelect">
+      <option value="classic.html">Index (classic.html)</option>
+      <option value="naqsho2.html">Naqsho 2</option>
+      <option value="naqsho3.html">Naqsho 3</option>
+    </select>
+
+    <label><input type="checkbox" id="welcomeFlag" checked /> Muuji xogta marka la scan gareeyo (?s=1)</label>
+
+    <p class="msg" id="statusMsg"></p>
+    <p class="url-out" id="urlText"></p>
+
+    <div class="btns">
+      <button type="button" class="btn-g" id="btnMake">Samee Barcode</button>
+      <button type="button" class="btn-o" id="btnTest">Fur Link Telefoonka</button>
+      <button type="button" class="btn-o" id="btnCopy">Nuqul</button>
+      <button type="button" class="btn-o" id="btnPrint">Daabac</button>
+    </div>
+
+    <div class="steps">
+      <strong>Sida loo sameeyo scan dhab ah:</strong><br />
+      1. Ku dar website internet (GitHub Pages / Netlify).<br />
+      2. Geli link halkan → Samee Barcode.<br />
+      3. Daabac barcode — scan telefoon → <strong>toos</strong> wuxuu furaa link-ka.<br />
+      <em>file:// ma shaqeeyo telefoon.</em>
+    </div>
+
+    <p style="text-align:center;margin-top:0.75rem;font-size:0.6rem">
+      <a href="index.html" style="color:var(--gold)">Hub</a> ·
+      <a href="edit.html" style="color:var(--gold)">Beddel</a>
+    </p>
+  </div>
+
+  <script>
+    (function() {
+      var siteUrl = document.getElementById('siteUrl');
+      var pageSelect = document.getElementById('pageSelect');
+      var welcomeFlag = document.getElementById('welcomeFlag');
+      var urlText = document.getElementById('urlText');
+      var statusMsg = document.getElementById('statusMsg');
+      var canvas = document.getElementById('bcCanvas');
+      var lastUrl = '';
+
+      var saved = localStorage.getItem('wedding-public-url');
+      if (saved) siteUrl.value = saved;
+      else if (location.protocol === 'https:') siteUrl.value = location.href.replace(/[^/]*$/, '');
+
+      var pre = new URLSearchParams(location.search).get('page');
+      if (pre && pageSelect.querySelector('option[value="' + pre + '"]')) pageSelect.value = pre;
+
+      function buildUrl() {
+        WeddingBarcode.setPublicBase(siteUrl.value);
+        return WeddingBarcode.directLink(pageSelect.value, welcomeFlag.checked);
+      }
+
+      function render() {
+        try {
+          lastUrl = buildUrl();
+          urlText.textContent = lastUrl;
+          if (WeddingBarcode.isValidScanUrl(lastUrl)) {
+            statusMsg.textContent = 'Waa sax — scan wuxuu furaa linkkan toos';
+            statusMsg.className = 'msg ok';
+            WeddingBarcode.draw(canvas, lastUrl, { barHeight: 90, maxWidth: 620, moduleWidth: 2 });
+          } else {
+            statusMsg.textContent = 'Geli https:// link sax ah (tusaale github.io)';
+            statusMsg.className = 'msg err';
+          }
+        } catch (e) {
+          statusMsg.textContent = e.message || String(e);
+          statusMsg.className = 'msg err';
+          urlText.textContent = '';
+        }
+      }
+
+      document.getElementById('btnMake').onclick = render;
+      siteUrl.onchange = render;
+      pageSelect.onchange = render;
+      welcomeFlag.onchange = render;
+
+      document.getElementById('btnTest').onclick = function() {
+        try {
+          var u = buildUrl();
+          window.open(u, '_blank');
+        } catch (e) { alert(e.message); }
+      };
+
+      document.getElementById('btnCopy').onclick = function() {
+        if (!lastUrl) return render();
+        navigator.clipboard.writeText(lastUrl).then(function() {
+          statusMsg.textContent = 'Link la nuqulay!';
+          statusMsg.className = 'msg ok';
+        });
+      };
+
+      document.getElementById('btnPrint').onclick = function() { window.print(); };
+
+      render();
+    })();
+  </script>
+</body>
+</html>
